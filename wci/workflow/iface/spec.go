@@ -32,6 +32,7 @@ type (
 	// ScalingGroupSpec is one entry: a list of task types and the compute/scaling spec that applies to them.
 	ScalingGroupSpec struct {
 		TaskTypes []enumspb.TaskQueueType `json:"task_types"`
+		RegionIds []string                `json:"region_ids,omitempty"`
 		Compute   ComputeProviderSpec     `json:"compute"`
 		Scaling   *ScalingAlgorithmSpec   `json:"scaling,omitempty"`
 	}
@@ -167,6 +168,10 @@ func (c *WorkerControllerInstanceSpec) Validate() error {
 		if len(k) == 0 {
 			return serviceerror.NewInvalidArgument("scaling groups without an ID are not supported")
 		}
+		// Region-scoped scaling isn't implemented yet, so reject any config using region_ids until then.
+		if len(v.RegionIds) > 0 {
+			return serviceerror.NewInvalidArgumentf("entry %s: region_ids is not supported yet", k)
+		}
 		if len(v.TaskTypes) == 0 {
 			if seenTaskTypeCatchAll {
 				return serviceerror.NewInvalidArgumentf("entry %s: only one scaling group can have no task types defined", k)
@@ -213,6 +218,7 @@ func (config ScalingAlgorithmConfig) ValidateFloat64Field(key string, minValidVa
 func (c *ScalingGroupSpec) Clone() *ScalingGroupSpec {
 	cloned := &ScalingGroupSpec{
 		TaskTypes: slices.Clone(c.TaskTypes),
+		RegionIds: slices.Clone(c.RegionIds),
 		Compute: ComputeProviderSpec{
 			ProviderType:  c.Compute.ProviderType,
 			NexusEndpoint: c.Compute.NexusEndpoint,
