@@ -58,3 +58,36 @@ func TestAWSSNSValidateConfig_ValidatesTopic(t *testing.T) {
  require.NoError(t,p.ValidateConfig(t.Context(),RequestContext{},ComputeProviderConfig{configAWSSNSTopicARN:testSNSTopicARN}))
  assert.Equal(t,testSNSTopicARN,topic)
 }
+
+func TestAWSSNSValidateConfig_RoleAndExternalIDAreOptional(t *testing.T) {
+ var topic string
+ stubSNSClient(t, &mockSNSClient{getTopicFn: func(_ context.Context, in *sns.GetTopicAttributesInput, _ ...func(*sns.Options)) (*sns.GetTopicAttributesOutput, error) {
+  topic = aws.ToString(in.TopicArn)
+  return &sns.GetTopicAttributesOutput{}, nil
+ }})
+ // The default provider requires role/external-ID for some AWS providers, but SNS
+ // uses the pod identity unless an explicit cross-account role is configured.
+ p := newSNSProvider()
+ p.requireRoleAndExternalID = true
+ require.NoError(t, p.ValidateConfig(t.Context(), RequestContext{}, ComputeProviderConfig{configAWSSNSTopicARN: testSNSTopicARN}))
+ assert.Equal(t, testSNSTopicARN, topic)
+}
+
+func TestAWSSNSUsesPodCredentialsWhenRoleOmitted(t *testing.T) {
+ var gotRole string
+ var gotExternalID *string
+ var gotIntermediaryRoles [][]client.AWSIAMRoleRequest
+ old := newSNSClientFn
+ newSNSClientFn = func(_ context.Context, _ string, role string, externalID *string, roles [][]client.AWSIAMRoleRequest) (snsAPI, error) {
+  gotRole, gotExternalID, gotIntermediaryRoles = role, externalID, roles
+  return &mockSNSClient{publishFn: func(context.Context, *sns.PublishInput, ...func(*sns.Options)) (*sns.PublishOutput, error) {
+   return &sns.PublishOutput{}, nil
+  }}, nil
+ }
+ t.Cleanup(func() { newSNSClientFn = old })
+ p := &awsSNSComputeProvider{intermediaryRoles: [][]client.AWSIAMRoleRequest{{{RoleARN: "arn:aws:iam::123456789012:role/intermediary", RoleSessionName: "test"}}}}
+ require.NoError(t, p.InvokeWorker(t.Context(), RequestContext{}, ComputeProviderConfig{configAWSSNSTopicARN: testSNSTopicARN}))
+ assert.Empty(t, gotRole)
+ assert.Nil(t, gotExternalID)
+ assert.Nil(t, gotIntermediaryRoles)
+}
