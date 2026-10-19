@@ -40,10 +40,6 @@ func NewAWSSNSComputeProvider(_ context.Context, dc *dynamicconfig.Collection) (
 }
 func (p *awsSNSComputeProvider) LaunchStrategy() LaunchStrategy { return LaunchStrategyInvoke }
 func (p *awsSNSComputeProvider) ValidateConfig(ctx context.Context, _ RequestContext, cfg ComputeProviderConfig) error {
- if p.requireRoleAndExternalID {
-  if role, _ := cfg[configAWSSNSRole].(string); role == "" { return fmt.Errorf("AWS SNS compute provider requires %q to be configured", configAWSSNSRole) }
-  if id, _ := cfg[configAWSSNSRoleExternalID].(string); id == "" { return fmt.Errorf("AWS SNS compute provider requires %q to be configured", configAWSSNSRoleExternalID) }
- }
  c, topic, region, err := p.getSNSClientAndTopicARN(ctx, cfg)
  if err != nil { return fmt.Errorf("cannot connect to the compute provider: %w", err) }
  if _, err = c.GetTopicAttributes(ctx, &sns.GetTopicAttributesInput{TopicArn: aws.String(topic)}); err != nil { return fmt.Errorf("cannot access the compute resource: %w", err) }
@@ -91,7 +87,14 @@ func (p *awsSNSComputeProvider) getSNSClientAndTopicARN(ctx context.Context, cfg
  if role != "" { if err := validateRoleARN(role); err != nil { return nil, "", "", err } }
  var externalID *string
  if id, ok := cfg[configAWSSNSRoleExternalID].(string); ok && id != "" { externalID = &id }
- c, err := newSNSClientFn(ctx, parsed.Region, role, externalID, p.intermediaryRoles)
+ // With no explicit target role, use the pod's ambient AWS credentials directly.
+ // Intermediary and target role assumption are only used when a role override is configured.
+ roles := p.intermediaryRoles
+ if role == "" {
+  roles = nil
+  externalID = nil
+ }
+ c, err := newSNSClientFn(ctx, parsed.Region, role, externalID, roles)
  if err != nil { return nil, "", "", err }
  return c, topic, parsed.Region, nil
 }
