@@ -22,7 +22,6 @@ const (
 
 type awsSNSComputeProvider struct {
  intermediaryRoles [][]client.AWSIAMRoleRequest
- requireRoleAndExternalID bool
 }
 type snsAPI interface {
  Publish(context.Context, *sns.PublishInput, ...func(*sns.Options)) (*sns.PublishOutput, error)
@@ -31,12 +30,10 @@ type snsAPI interface {
 func init() { RegisterComputeProvider(iface.ComputeProviderTypeAWSSNS, NewAWSSNSComputeProvider) }
 func NewAWSSNSComputeProvider(_ context.Context, dc *dynamicconfig.Collection) (ComputeProvider, error) {
  var roles [][]client.AWSIAMRoleRequest
- require := true
  if dc != nil {
   roles = client.WorkerControllerAWSIntermediaryRoles.Get(dc)()
-  require = client.WorkerControllerAWSRequireRoleAndExternalID.Get(dc)()
  }
- return &awsSNSComputeProvider{intermediaryRoles: roles, requireRoleAndExternalID: require}, nil
+ return &awsSNSComputeProvider{intermediaryRoles: roles}, nil
 }
 func (p *awsSNSComputeProvider) LaunchStrategy() LaunchStrategy { return LaunchStrategyInvoke }
 func (p *awsSNSComputeProvider) ValidateConfig(ctx context.Context, _ RequestContext, cfg ComputeProviderConfig) error {
