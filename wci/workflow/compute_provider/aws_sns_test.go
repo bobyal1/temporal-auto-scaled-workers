@@ -54,17 +54,12 @@ func TestAWSSNSInvokeWorker_PublishesActivationMessage(t *testing.T) {
 	require.NoError(t, newSNSProvider().InvokeWorker(t.Context(), rc, ComputeProviderConfig{configAWSSNSTopicARN: testSNSTopicARN}))
 	assert.Equal(t, testSNSTopicARN, topic)
 
-	var msg struct {
-		Event      string `json:"event"`
-		Namespace  string `json:"namespaceName"`
-		Deployment string `json:"deploymentName"`
-		Build      string `json:"buildId"`
-	}
+	var msg AWSSNSWorkerActivationMessage
 	require.NoError(t, json.Unmarshal([]byte(body), &msg))
-	assert.Equal(t, "worker-activation", msg.Event)
-	assert.Equal(t, "ns", msg.Namespace)
-	assert.Equal(t, "deployment", msg.Deployment)
-	assert.Equal(t, "build-123", msg.Build)
+	assert.Equal(t, AWSSNSWorkerActivationEvent, msg.Event)
+	assert.Equal(t, "ns", msg.NamespaceName)
+	assert.Equal(t, "deployment", msg.DeploymentName)
+	assert.Equal(t, "build-123", msg.BuildID)
 }
 
 func TestAWSSNSInvokeWorker_PublishError(t *testing.T) {
@@ -104,13 +99,13 @@ func TestAWSSNSValidateConfig_RoleAndExternalIDAreOptional(t *testing.T) {
 			return &sns.GetTopicAttributesOutput{}, nil
 		},
 	})
-	// The default AWS credential chain provides the pod identity; role overrides are optional.
+	// The default AWS credential chain provides the subscriber's local credentials; role overrides are optional.
 	p := newSNSProvider()
 	require.NoError(t, p.ValidateConfig(t.Context(), RequestContext{}, ComputeProviderConfig{configAWSSNSTopicARN: testSNSTopicARN}))
 	assert.Equal(t, testSNSTopicARN, topic)
 }
 
-func TestAWSSNSUsesPodCredentialsWhenRoleOmitted(t *testing.T) {
+func TestAWSSNSUsesLocalCredentialsWhenRoleOmitted(t *testing.T) {
 	var gotRole string
 	var gotExternalID *string
 	var gotIntermediaryRoles [][]client.AWSIAMRoleRequest
