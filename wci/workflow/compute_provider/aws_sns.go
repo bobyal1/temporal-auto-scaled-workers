@@ -19,7 +19,20 @@ const (
 	configAWSSNSTopicARN       = "topic_arn"
 	configAWSSNSRole           = "role"
 	configAWSSNSRoleExternalID = "role_external_id"
+
+	// AWSSNSWorkerActivationEvent is the event value published for worker activation.
+	AWSSNSWorkerActivationEvent = "worker-activation"
 )
+
+// AWSSNSWorkerActivationMessage is the JSON payload published to the configured SNS
+// topic when the worker controller requests worker activation. This exported type is
+// the public contract for SNS subscribers and can be used to generate a JSON Schema.
+type AWSSNSWorkerActivationMessage struct {
+	Event          string `json:"event"`
+	NamespaceName  string `json:"namespaceName"`
+	DeploymentName string `json:"deploymentName"`
+	BuildID        string `json:"buildId"`
+}
 
 type awsSNSComputeProvider struct {
 	intermediaryRoles [][]client.AWSIAMRoleRequest
@@ -73,13 +86,8 @@ func (p *awsSNSComputeProvider) invokeWorker(ctx context.Context, rc RequestCont
 		return err
 	}
 
-	message, err := json.Marshal(struct {
-		Event          string `json:"event"`
-		NamespaceName  string `json:"namespaceName"`
-		DeploymentName string `json:"deploymentName"`
-		BuildID        string `json:"buildId"`
-	}{
-		Event:          "worker-activation",
+	message, err := json.Marshal(AWSSNSWorkerActivationMessage{
+		Event:          AWSSNSWorkerActivationEvent,
 		NamespaceName:  rc.NamespaceName,
 		DeploymentName: rc.DeploymentName,
 		BuildID:        rc.DeploymentBuildID,
@@ -146,7 +154,7 @@ func (p *awsSNSComputeProvider) getSNSClientAndTopicARN(ctx context.Context, cfg
 		externalID = &id
 	}
 
-	// With no explicit target role, use the pod's ambient AWS credentials directly.
+	// Without an explicit target role, use the subscriber's local AWS credentials.
 	// Intermediary and target role assumption are only used for an explicit role override.
 	intermediaryRoles := p.intermediaryRoles
 	if roleARN == "" {
