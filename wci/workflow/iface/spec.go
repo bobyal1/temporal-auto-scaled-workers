@@ -50,7 +50,7 @@ type (
 
 const (
 	ComputeProviderTypeAWSLambda     ComputeProviderType = "aws-lambda"
-	ComputeProviderTypeAWSSNS         ComputeProviderType = "aws-sns"
+	ComputeProviderTypeAWSSNS        ComputeProviderType = "aws-sns"
 	ComputeProviderTypeAWSAgentCore  ComputeProviderType = "aws-agentcore"
 	ComputeProviderTypeAWSECS        ComputeProviderType = "aws-ecs"
 	ComputeProviderTypeSubprocess    ComputeProviderType = "subprocess"
